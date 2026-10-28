@@ -1,0 +1,55 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edgeguard-api
+    environment:
+      DATA_DIR: /app/data
+      MODEL_DIR: /app/models
+      LOG_DIR: /app/logs
+      FLoci_AZ_BASE_URL: ${FLoci_AZ_BASE_URL:-http://http://localhost:4500/console/azure}
+      AZURE_ACCOUNT_NAME: ${AZURE_ACCOUNT_NAME:-devstoreaccount1}
+      AZURE_ACCOUNT_KEY: ${AZURE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+      AZURE_CLOUD_ENABLED: ${AZURE_CLOUD_ENABLED:-true}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edgeguard-simulator
+    command: ["python", "-m", "app.simulator"]
+    environment:
+      API_URL: http://api:8000
+      SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-3}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: edgeguard-dashboard
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
